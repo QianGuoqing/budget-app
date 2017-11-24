@@ -3,6 +3,19 @@ var budgetController = (function() {
     this.id = id
     this.description = description
     this.value = value
+    this.percentage = -1
+  }
+
+  Expense.prototype.calcPercentage = function(totalIncome) {
+    if (totalIncome > 0) {
+      this.percentage = Math.round((this.value / totalIncome) * 100)
+    } else {
+      this.percentage = -1
+    }
+  }
+
+  Expense.prototype.getPercentage = function() {
+    return this.percentage
   }
 
   var Income = function(id, description, value) {
@@ -79,6 +92,19 @@ var budgetController = (function() {
       }
     },
 
+    calculatePercentages: function() {
+      data.allItems.exp.forEach(function(cur) {
+        current.calcPercentage(data.totals.inc)        
+      })
+    },
+
+    getPercentages: function() {
+      var allPerc = data.allItems.exp.map(function(cur) {
+        return cur.getPercentage()
+      })
+      return allPerc
+    },
+
     getBudget: function() {
       return {
         budget: data.budget,
@@ -108,7 +134,25 @@ var UIController = (function() {
     incomeLabel: '.budget__income--value',
     expensesLabel: '.budget__expenses--value',
     percentageLabel: '.budget__expenses--percentage',
-    container: '.container'
+    container: '.container',
+    expensesPercLabel: '.item__percentage',
+    dateLabel: '.budget__title--month'
+  }
+
+  var formatNumber = function(num, type) {
+    var numSplit, int, dec, type
+    num = Math.abs(num)
+    num = num.toFixed(2)
+
+    numSplit = num.split('.')
+
+    int = numSplit[0]
+    if (int.length > 3) {
+      int = int.substr(0, int.length - 3) + ',' + int.substr(int.length - 3, 3)
+    }
+    des = numSplit[1]
+    
+    return (type === 'exp' ? '-' : '+') + ' ' + int + '.' + dec
   }
 
   return {
@@ -190,6 +234,45 @@ var UIController = (function() {
       }
     },
 
+    displayPercentages: function(percentages) {
+      var fields = document.querySelectorAll(DOMStrings.expensesPercLabel)
+
+      var nodeListForEach = function(list, callback) {
+        for (var i = 0; i < list.length; i++) {
+          callback(list[i], i)
+        }
+      }
+
+      nodeListForEach(fields, function(current, index) {
+        if (percentages[index] > 0) {
+          current.textContent = percentages[index] + '%'
+        } else {
+          current.textContent = '---'
+        }
+      })
+
+    },
+
+    displayMonth: function () {
+      var now, year, month
+      now = new Date()
+      month = now.getMonth() + 1
+      year = now.getFullYear()
+      document.querySelector(DOMStrings.dateLabel).textContent = year + '/' + month
+    },
+
+    changedType: function() {
+      var fields = document.querySelectorAll(
+        DOMStrings.inputType + ',' +
+        DOMStrings.inputDescription + ',' +
+        DOMStrings.inputValue
+      )
+
+      nodeListForEach(fields, function(cur) {
+        cur.classList.toggle('red-focus')
+      })
+    },
+
     getDomStrings: function() {
       return DOMStrings
     }
@@ -209,12 +292,20 @@ var controller = (function(budgetCtrl, UICtrl) {
     })
 
     document.querySelector(DOM.container).addEventListener('click', ctrlDeleteItem)
+
+    document.querySelector(DOM.inputType).addEventListener('change', UICtrl.changedType)
   }
 
   var updateBudget = function() {
     budgetCtrl.calculateBudget()
     var budget = budgetCtrl.getBudget()
     UICtrl.displayBudget(budget)
+  }
+
+  var updatePercentages = function() {
+    budgetCtrl.calculatePercentages()
+    var percentages = budgetCtrl.getPercentages()
+    UICtrl.displayPercentages(percentages)
   }
 
   var ctrlAddItem = function() {
@@ -230,6 +321,8 @@ var controller = (function(budgetCtrl, UICtrl) {
       UIController.clearFields()
       
       updateBudget()
+
+      updatePercentages()
     }
   }
 
@@ -247,11 +340,14 @@ var controller = (function(budgetCtrl, UICtrl) {
       UICtrl.deleteListItem(itemID)
 
       updateBudget()
+
+      updatePercentages()
     }
   }
 
   return {
     init: function() {
+      UICtrl.displayMonth()
       UICtrl.displayBudget({
         budget: 0,
         totalInc: 0,
